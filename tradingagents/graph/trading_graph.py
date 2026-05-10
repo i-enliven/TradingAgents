@@ -276,6 +276,7 @@ class TradingAgentsGraph:
         self._resolve_pending_entries(company_name)
 
         # Recompile with a checkpointer if the user opted in.
+        is_resume = False
         if self.config.get("checkpoint_enabled"):
             self._checkpointer_ctx = get_checkpointer(
                 self.config["data_cache_dir"], company_name
@@ -290,18 +291,19 @@ class TradingAgentsGraph:
                 logger.info(
                     "Resuming from step %d for %s on %s", step, company_name, trade_date
                 )
+                is_resume = True
             else:
                 logger.info("Starting fresh for %s on %s", company_name, trade_date)
 
         try:
-            return self._run_graph(company_name, trade_date)
+            return self._run_graph(company_name, trade_date, is_resume)
         finally:
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date):
+    def _run_graph(self, company_name, trade_date, is_resume=False):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM.
         past_context = self.memory_log.get_past_context(company_name)
@@ -315,17 +317,23 @@ class TradingAgentsGraph:
             tid = thread_id(company_name, str(trade_date))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
+        input_state = None if is_resume else init_agent_state
+
         if self.debug:
             trace = []
-            for chunk in self.graph.stream(init_agent_state, **args):
-                if len(chunk["messages"]) == 0:
+            for chunk in self.graph.stream(input_state, **args):
+                if len(chunk.get("messages", [])) == 0:
                     pass
                 else:
                     chunk["messages"][-1].pretty_print()
-                    trace.append(chunk)
-            final_state = trace[-1]
+                trace.append(chunk)
+            
+            if not trace:
+                final_state = self.graph.get_state(args["config"]).values
+            else:
+                final_state = trace[-1]
         else:
-            final_state = self.graph.invoke(init_agent_state, **args)
+            final_state = self.graph.invoke(input_state, **args)
 
         # Store current state for reflection.
         self.curr_state = final_state

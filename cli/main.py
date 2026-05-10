@@ -810,14 +810,14 @@ ANALYST_REPORT_MAP = {
 }
 
 
-def update_analyst_statuses(message_buffer, chunk):
+def update_analyst_statuses(message_buffer, chunk, parallel_analysts=False):
     """Update analyst statuses based on accumulated report state.
 
     Logic:
     - Store new report content from the current chunk if present
     - Check accumulated report_sections (not just current chunk) for status
     - Analysts with reports = completed
-    - First analyst without report = in_progress
+    - First analyst without report = in_progress (or all if parallel_analysts is True)
     - Remaining analysts without reports = pending
     - When all analysts done, set Bull Researcher to in_progress
     """
@@ -840,7 +840,7 @@ def update_analyst_statuses(message_buffer, chunk):
 
         if has_report:
             message_buffer.update_agent_status(agent_name, "completed")
-        elif not found_active:
+        elif parallel_analysts or not found_active:
             message_buffer.update_agent_status(agent_name, "in_progress")
             found_active = True
         else:
@@ -1032,9 +1032,13 @@ def run_analysis(checkpoint: bool = False):
         )
         update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
-        # Update agent status to in_progress for the first analyst
-        first_analyst = f"{selections['analysts'][0].value.capitalize()} Analyst"
-        message_buffer.update_agent_status(first_analyst, "in_progress")
+        # Update agent status to in_progress for the analyst(s)
+        if config.get("parallel_analysts", False):
+            for analyst in selections["analysts"]:
+                message_buffer.update_agent_status(f"{analyst.value.capitalize()} Analyst", "in_progress")
+        else:
+            first_analyst = f"{selections['analysts'][0].value.capitalize()} Analyst"
+            message_buffer.update_agent_status(first_analyst, "in_progress")
         update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
         # Create spinner text
@@ -1074,7 +1078,7 @@ def run_analysis(checkpoint: bool = False):
                             message_buffer.add_tool_call(tool_call.name, tool_call.args)
 
             # Update analyst statuses based on report state (runs on every chunk)
-            update_analyst_statuses(message_buffer, chunk)
+            update_analyst_statuses(message_buffer, chunk, parallel_analysts=config.get("parallel_analysts", False))
 
             # Research Team - Handle Investment Debate State
             if chunk.get("investment_debate_state"):
