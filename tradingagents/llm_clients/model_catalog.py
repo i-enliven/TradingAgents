@@ -114,6 +114,14 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Qwen3:latest (8B, local)", "qwen3:latest"),
         ],
     },
+    "vllm": {
+        "quick": [
+            ("Qwen3.6-35B-A3B", "local-vllm"),
+        ],
+        "deep": [
+            ("Qwen3.6-35B-A3B", "local-vllm"),
+        ],
+    },
 }
 
 

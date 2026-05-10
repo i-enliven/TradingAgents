@@ -35,6 +35,7 @@ DEFAULT_CONFIG = {
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
+    "parallel_analysts": True,
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
     "data_vendors": {
